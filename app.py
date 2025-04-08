@@ -3,13 +3,31 @@ from pymongo import MongoClient
 from flask_restful import Resource, Api, reqparse
 import hashlib, os
 from bson import ObjectId
-from data_validations import validate_register_data
+from data_validations import validate_register_data, validate_jwt_token
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import logging
 from logging.handlers import RotatingFileHandler
+import jwt
+import datetime
 from flask_cors import CORS
 
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+
+
+def generate_token(user_id):
+    payload = {
+        "user_id": str(user_id),
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+def decode_token(token):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload["user_id"]
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
 app = Flask(__name__)
 api = Api(app)
 
@@ -77,10 +95,91 @@ class Login(Resource):
         if not user:
             app.logger.info("Invalid credentials")
             return {"message": "Invalid credentials"}, 401
-        return {"message": "Login successful", "user_id": str(user["_id"])}, 200
+        token = generate_token(user["_id"])
+        return {"message": "Login successful", "user_id": str(user["_id"]),"token": token }, 200
 
+class Tasks(Resource):
+    def get(self):
+        auth_header = request.headers.get("Authorization")
+        validated, userid_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return userid_or_msg, 401
+        user_id = userid_or_msg
+        user_tasks = tasks.find({"user_id": user_id})
+        return [{"_id": str(t["_id"]), **{k: v for k, v in t.items() if k != "_id"}} for t in user_tasks]
+
+    def post(self):
+        auth_header = request.headers.get("Authorization")
+        validated, userid_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return userid_or_msg, 401
+        user_id = userid_or_msg
+
+        data = request.get_json()
+        title = data.get("title")
+        description = data.get("description", "")
+
+        if not title:
+            return {"error": "Task title is required"}, 400
+
+        task = {
+            "title": title,
+            "description": description,
+            "user_id": user_id
+        }
+        result = tasks.insert_one(task)
+        return {"message": "Task created", "task_id": str(result.inserted_id)}, 201
+
+class SingleTask:
+    def get(self, task_id):
+        auth_header = request.headers.get("Authorization")
+        validated, userid_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return userid_or_msg, 401
+        user_id = userid_or_msg
+
+        task = tasks.find_one({"_id": ObjectId(task_id), "user_id": user_id})
+        if not task:
+            return {"error": "Task not found"}, 404
+        return {"_id": str(task["_id"]), **{k: v for k, v in task.items() if k != "_id"}}
+
+    def delete(self, task_id):
+        auth_header = request.headers.get("Authorization")
+        validated, userid_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return userid_or_msg, 401
+        user_id = userid_or_msg
+
+        result = tasks.delete_one({"_id": ObjectId(task_id), "user_id": user_id})
+        if result.deleted_count == 0:
+            return {"error": "Task not found"}, 404
+        return {"message": "Task deleted"}, 200
+
+    def put(self, task_id):
+        auth_header = request.headers.get("Authorization")
+        validated, userid_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return userid_or_msg, 401
+        user_id = userid_or_msg
+
+        data = request.get_json()
+        title = data.get("title")
+        description = data.get("description", "")
+
+        if not title:
+            return {"error": "Task title is required"}, 400
+
+        result = tasks.update_one(
+            {"_id": ObjectId(task_id), "user_id": user_id},
+            {"$set": {"title": title, "description": description}}
+        )
+        if result.matched_count == 0:
+            return {"error": "Task not found"}, 404
+        return {"message": "Task updated"}, 200
 
 api.add_resource(Register, "/api/auth/register")
 api.add_resource(Login, "/api/auth/login")
+api.add_resource(Tasks, "/api/tasks")
+api.add_resource(SingleTask, "/api/tasks/<string:task_id>")
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
