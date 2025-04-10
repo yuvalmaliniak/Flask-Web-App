@@ -1,5 +1,6 @@
-import jwt
-from app import decode_token
+import jwt, os
+JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
+
 def validate_register_data(data):
     if not isinstance(data, dict):
         return False, "Invalid data format. Expected a JSON object."
@@ -14,7 +15,12 @@ def validate_register_data(data):
         return False, "Username must be at least 3 characters and password at least 6 characters long."
 
     return True, "Data is valid."
-
+def decode_token(token):
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload["user_id"]
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
 def validate_jwt_token(token):
     if not token or not token.startswith("Bearer "):
         return False,{"error": "Missing or invalid token"}

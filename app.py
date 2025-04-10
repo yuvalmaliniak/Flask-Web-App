@@ -3,17 +3,18 @@ from pymongo import MongoClient
 from flask_restful import Resource, Api, reqparse
 import hashlib, os
 from bson import ObjectId
-from data_validations import validate_register_data, validate_jwt_token
+from data_validations import validate_register_data, validate_jwt_token, decode_token
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import logging
 from logging.handlers import RotatingFileHandler
 import jwt
 import datetime
+import openai
 from flask_cors import CORS
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
-
 
 def generate_token(user_id):
     payload = {
@@ -22,12 +23,6 @@ def generate_token(user_id):
     }
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
-def decode_token(token):
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        return payload["user_id"]
-    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-        return None
 app = Flask(__name__)
 api = Api(app)
 
@@ -47,7 +42,7 @@ client = MongoClient(connection_string)
 db = client['task_manager']
 users = db['users']
 tasks = db['tasks']
-
+recommendations = db['recommendations']
 # To change:
 #CORS(app,origins=["http://localhost:3000"], supports_credentials=True)
 @app.route('/')
@@ -130,7 +125,7 @@ class Tasks(Resource):
         result = tasks.insert_one(task)
         return {"message": "Task created", "task_id": str(result.inserted_id)}, 201
 
-class SingleTask:
+class SingleTask(Resource):
     def get(self, task_id):
         auth_header = request.headers.get("Authorization")
         validated, userid_or_msg = validate_jwt_token(auth_header)
@@ -177,9 +172,51 @@ class SingleTask:
             return {"error": "Task not found"}, 404
         return {"message": "Task updated"}, 200
 
+class Recommend(Resource):
+    def post(self):
+        auth_header = request.headers.get("Authorization")
+        validated, user_id_or_msg = validate_jwt_token(auth_header)
+        if not validated:
+            return {"error": user_id_or_msg}, 401
+        user_id = user_id_or_msg
+
+        # Validate input
+        user_tasks = tasks.find({"user_id": user_id})
+        for task in user_tasks:
+            task_id = str(task.get("_id"))
+            if task.get("description") == "":
+                return {"error": "Task description is required"}, 400
+            description = task.get("description")
+
+            # Ask OpenAI
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "You're a productivity assistant."},
+                        {"role": "user", "content": f"Give a recommendation for: {description}"}
+                    ]
+                )
+                recommendation = response["choices"][0]["message"]["content"]
+                # Store in DB
+                recommendations.insert_one({
+                    "user_id": user_id,
+                    "task_id": task_id,
+                    "description": description,
+                    "recommendation": recommendation
+                })
+
+
+
+            except Exception as e:
+                return {"error": f"AI service failed: {str(e)}"}, 500
+
+        return recommendations.find({"user_id": user_id}), 200
+
 api.add_resource(Register, "/api/auth/register")
 api.add_resource(Login, "/api/auth/login")
 api.add_resource(Tasks, "/api/tasks")
 api.add_resource(SingleTask, "/api/tasks/<string:task_id>")
+api.add_resource(Recommend, "/api/ai/recommend")
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
