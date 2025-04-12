@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Task Manager</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body>
+  <div class="login-container">
+    <img src="/static/task.png" alt="Task Icon">
+    <h2>Your Tasks</h2>
+
+    <form id="taskForm">
+      <input type="text" id="title" placeholder="Task Title" required>
+      <input type="text" id="description" placeholder="Description">
+      <button type="submit">Add Task</button>
+    </form>
+
+    <button id="loadSchedule">📅 Show Today's Schedule</button>
+    <pre id="scheduleOutput"></pre>
+
+    <button id="loadSummary">🧠 Show Weekly Summary</button>
+    <pre id="summaryOutput"></pre>
+
+    <ul id="taskList"></ul>
+  </div>
+
+  <script src="/static/tasks.js"></script>
+</body>
+</html>

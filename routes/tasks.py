@@ -3,7 +3,7 @@ from flask import request, current_app as app
 from data_validations import validate_jwt_token
 from Utils.db import get_tasks_collection
 from bson import ObjectId
-
+from routes.telegram import send_telegram_message
 
 tasks = get_tasks_collection()
 class Tasks(Resource):
@@ -36,6 +36,7 @@ class Tasks(Resource):
             "user_id": user_id
         }
         result = tasks.insert_one(task)
+        send_telegram_message(f"New task created: {title}\nTask Description: \n{description}")
         return {"message": "Task created", "task_id": str(result.inserted_id)}, 201
 
 class SingleTask(Resource):

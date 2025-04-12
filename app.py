@@ -1,4 +1,4 @@
-from flask import Flask,render_template
+from flask import Flask, render_template, redirect
 from flask.cli import load_dotenv
 from flask_restful import Api
 import logging, os
@@ -9,7 +9,7 @@ import dotenv
 from Utils.limiter import limiter
 from routes.auth import Register, Login
 from routes.tasks import Tasks, SingleTask
-from routes.recommends import Recommend
+from routes.recommends import Recommend,WeeklySummary,Schedule
 load_dotenv()
 
 app = Flask(__name__)
@@ -35,15 +35,29 @@ recommendations = db['recommendations']
 def home():
     return render_template('login.html')
 
+@app.route('/register')
+def register_page():
+    return render_template('register.html')
+
+@app.route('/tasks')
+def tasks_page():
+    return render_template('tasks.html')
+
+@app.route('/logout')
+def logout():
+    response = redirect('/')
+    response.set_cookie('token', '', expires=0)
+    return response
+
+
 limiter.init_app(app)
-
-
-
 
 api.add_resource(Register, "/api/auth/register")
 api.add_resource(Login, "/api/auth/login")
 api.add_resource(Tasks, "/api/tasks")
 api.add_resource(SingleTask, "/api/tasks/<string:task_id>")
 api.add_resource(Recommend, "/api/ai/recommend")
+api.add_resource(WeeklySummary, "/api/ai/weekly_summary")
+api.add_resource(Schedule, "/api/ai/schedule")
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000, debug=False)
