@@ -29,8 +29,9 @@ db = db_init()
 users = db['users']
 tasks = db['tasks']
 recommendations = db['recommendations']
-# To change:
-#CORS(app,origins=["http://localhost:3000"], supports_credentials=True)
+# Allow from origin only
+frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+CORS(app, origins=[frontend_origin], supports_credentials=True)
 @app.route('/')
 def home():
     return render_template('login.html')
