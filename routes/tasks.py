@@ -1,6 +1,6 @@
 from flask_restful import Resource
-from flask import request, current_app as app
-from data_validations import validate_jwt_token
+from flask import request
+from Utils.data_validations import validate_jwt_token
 from Utils.db import get_tasks_collection
 from bson import ObjectId
 from routes.telegram import send_telegram_message

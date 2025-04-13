@@ -1,10 +1,10 @@
 from flask.cli import load_dotenv
 from flask_restful import Resource
 from flask import request, current_app as app
-from data_validations import validate_jwt_token
+from Utils.data_validations import validate_jwt_token
 from Utils.db import get_tasks_collection, get_recommendations_collection
 from openai import OpenAI
-import dotenv, os, re
+import os, re
 from routes.telegram import send_telegram_message
 
 load_dotenv()

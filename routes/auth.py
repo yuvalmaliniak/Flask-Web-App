@@ -2,7 +2,7 @@ from flask_restful import Resource
 from flask import request, current_app as app
 from Utils.db import get_users_collection
 from Utils.jwt_utils import hash_password, generate_token
-from data_validations import validate_register_data
+from Utils.data_validations import validate_register_data
 from Utils.limiter import limiter
 
 users = get_users_collection()
